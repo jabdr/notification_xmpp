@@ -30,9 +30,11 @@ func recvHostBySrv(domain string) (string, error) {
 }
 
 type Configuration struct {
-	Host     string
-	Username string
-	Password string
+	Host              string
+	Username          string
+	Password          string
+	StartTLS          bool
+	IgnoreCertificate bool
 }
 
 func NewConfiguration(data []byte) (*Configuration, error) {
@@ -63,14 +65,16 @@ func (configuration *Configuration) CreateXMPPClient() (*xmpp.Client, error) {
 		Host:     configuration.Host,
 		User:     configuration.Username,
 		Password: configuration.Password,
-		NoTLS:    true,
-		StartTLS: true,
-		Debug:    true,
 		Session:  true,
-		TLSConfig: &tls.Config{
+	}
+	if configuration.StartTLS {
+		options.NoTLS = true
+		options.StartTLS = true
+	}
+	if configuration.IgnoreCertificate {
+		options.TLSConfig = &tls.Config{
 			InsecureSkipVerify: true,
-			ServerName:         "thelambda.de",
-		},
+		}
 	}
 	return options.NewClient()
 }
