@@ -35,6 +35,7 @@ type Configuration struct {
 	Password          string
 	StartTLS          bool
 	IgnoreCertificate bool
+	Html              bool
 }
 
 func NewConfiguration(data []byte) (*Configuration, error) {
@@ -83,12 +84,14 @@ type Cli struct {
 	ConfigurationFile   string
 	MessageTemplateFile string
 	TargetUsername      string
+	Arguments           map[string]string
 }
 
 func NewCli() *Cli {
 	var cli *Cli
 
 	cli = new(Cli)
+	cli.Arguments = make(map[string]string)
 	flag.StringVar(&cli.ConfigurationFile, "configuration-file", "", "Path to xmpp configuration file")
 	flag.StringVar(&cli.MessageTemplateFile, "template-file", "", "Path to the message template")
 	flag.StringVar(&cli.TargetUsername, "target-username", "", "Name of user that should receive the message")
@@ -110,6 +113,15 @@ func NewCli() *Cli {
 
 	if cli.TargetUsername == "" {
 		log.Fatalf("You mus specify a target username")
+	}
+
+	args := flag.Args()
+	for _, arg := range args {
+		argKv := strings.SplitN(arg, "=", 2)
+		if len(argKv) != 2 {
+			log.Fatalf("Invalid argument: %s", arg)
+		}
+		cli.Arguments[argKv[0]] = argKv[1]
 	}
 
 	return cli
@@ -135,7 +147,7 @@ func sendMessage(cli *Cli, configuration *Configuration) {
 	}
 
 	var templateBuffer bytes.Buffer
-	template.Execute(&templateBuffer, nil)
+	template.Execute(&templateBuffer, cli.Arguments)
 
 	xmppClient, err := configuration.CreateXMPPClient()
 	if err != nil {
@@ -143,8 +155,14 @@ func sendMessage(cli *Cli, configuration *Configuration) {
 	}
 	defer xmppClient.Close()
 
-	if _, err = xmppClient.SendHtml(xmpp.Chat{Remote: cli.TargetUsername, Type: "chat", Text: templateBuffer.String()}); err != nil {
-		log.Fatalf("Could not send message: %s", err)
+	if configuration.Html {
+		if _, err = xmppClient.SendHtml(xmpp.Chat{Remote: cli.TargetUsername, Type: "chat", Text: templateBuffer.String()}); err != nil {
+			log.Fatalf("Could not send message: %s", err)
+		}
+	} else {
+		if _, err = xmppClient.Send(xmpp.Chat{Remote: cli.TargetUsername, Type: "chat", Text: templateBuffer.String()}); err != nil {
+			log.Fatalf("Could not send message: %s", err)
+		}
 	}
 }
 
